@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <title>CORE AI · Intelligent Assistant</title>
+  
+  <!-- Meta tags for SEO and PWA -->
+  <meta name="description" content="CORE AI - Intelligent assistant with chat, search, proposals and translation">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,13 +18,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- reCAPTCHA -->
-  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  <!-- reCAPTCHA (with site key) -->
+  <script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
   <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- Chart.js for charts -->
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
   <style>
@@ -51,6 +58,9 @@
       --search-loader: #3b82f6;
       --tag-web: #2563eb;
       --tag-deep: #7c3aed;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
       
       --mobile: 480px;
       --tablet: 768px;
@@ -288,6 +298,87 @@
     @keyframes introFadeOut {
       0% { opacity: 1; }
       100% { opacity: 0; visibility: hidden; }
+    }
+
+    /* ============================================
+       CONNECTION STATUS
+    ============================================ */
+    .connection-status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 8px 16px;
+      border-radius: 40px;
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 1002;
+      animation: slideDown 0.3s ease;
+      box-shadow: var(--shadow-md);
+    }
+
+    .connection-status.online {
+      background: #d1fae5;
+      color: #065f46;
+      border-left: 4px solid #10b981;
+    }
+
+    .connection-status.offline {
+      background: #fee2e2;
+      color: #991b1b;
+      border-left: 4px solid #ef4444;
+    }
+
+    body.dark .connection-status.online {
+      background: #064e3b;
+      color: #d1fae5;
+    }
+
+    body.dark .connection-status.offline {
+      background: #7f1d1d;
+      color: #fee2e2;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ============================================
+       PROGRESS BAR
+    ============================================ */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #2563eb, #7c3aed, #06b6d4);
+      transition: width 0.3s ease;
+      z-index: 9999;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+    }
+
+    /* ============================================
+       DRAG & DROP ZONE
+    ============================================ */
+    .input-section.drag-over {
+      border-color: var(--primary) !important;
+      background: var(--primary-light) !important;
+      transform: scale(1.01);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+    }
+
+    body.dark .input-section.drag-over {
+      background: #2d3748 !important;
+      border-color: #4299e1 !important;
     }
 
     /* ============================================
@@ -1055,6 +1146,7 @@
       padding-bottom: max(20px, env(safe-area-inset-bottom));
       width: 100%;
       z-index: 10;
+      transition: all 0.3s ease;
     }
 
     body.dark .input-section {
@@ -1878,8 +1970,17 @@
     </div>
   </div>
 
+  <!-- Connection status indicator (NEW) -->
+  <div id="connectionStatus" class="connection-status online hidden">
+    <i class="fas fa-wifi"></i>
+    <span>Connecté</span>
+  </div>
+
+  <!-- Progress bar (NEW) -->
+  <div id="progressBar" class="progress-bar" style="width: 0%;"></div>
+
   <!-- Sidebar toggle button -->
-  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" aria-label="Menu">
     <i class="fas fa-bars"></i>
   </button>
 
@@ -2016,7 +2117,7 @@
           </div>
 
           <div class="recaptcha-wrapper">
-            <div class="g-recaptcha" data-sitekey="6Le6dW0sAAAAAIaf6Aw9v8c28yzEMeWJEiBoZKGF"></div>
+            <div id="recaptchaContainer"></div>
           </div>
 
           <button onclick="generateProposal()" class="generate-btn">
@@ -2049,12 +2150,12 @@
         </div>
       </div>
 
-      <!-- INPUT SECTION - NOUVEAU DESIGN UNIQUEMENT -->
-      <div class="input-section">
+      <!-- INPUT SECTION -->
+      <div class="input-section" id="inputSection">
         <div class="input-wrapper-container">
           
           <div class="plus-menu-wrapper">
-            <button class="btn-plus-modern" id="btnPlusModern" onclick="toggleFloatingMenu()">
+            <button class="btn-plus-modern" id="btnPlusModern" onclick="toggleFloatingMenu()" aria-label="Plus d'options">
               <i class="fas fa-plus"></i>
             </button>
             
@@ -2063,8 +2164,8 @@
               <div class="menu-item" onclick="menuAction('proposal')"><i class="fas fa-file-alt"></i> Proposal</div>
               <div class="menu-item" onclick="toggleDeepThink()"><i class="fas fa-brain"></i> Deep Think</div>
               <div class="menu-item" onclick="showChartMenu()"><i class="fas fa-chart-bar"></i> Create chart</div>
-              <div class="menu-item" onclick="menuAction('upload')"><i class="fas fa-cloud-upload-alt"></i> Upload photo</div>
-              <div class="menu-item" onclick="menuAction('attach')"><i class="fas fa-paperclip"></i> Attach file</div>
+              <div class="menu-item" onclick="triggerFileUpload()"><i class="fas fa-cloud-upload-alt"></i> Upload photo</div>
+              <div class="menu-item" onclick="triggerFileUpload()"><i class="fas fa-paperclip"></i> Attach file</div>
             </div>
           </div>
 
@@ -2072,29 +2173,30 @@
             
             <div id="deepThinkBadge" class="modern-thinking-chip hidden">
               <i class="fas fa-lightbulb"></i>
-              <span>Réfléchir</span>
+              <span>Deep Think Mode</span>
               <i class="fas fa-times close-chip-icon" onclick="toggleDeepThink()"></i>
             </div>
 
             <div class="input-core-row">
               <textarea 
                 id="messageInput"
-                placeholder="Demander à CORE AI..."
+                placeholder="Ask CORE AI anything..."
                 rows="1"
                 oninput="handleInput()"
                 onkeydown="handleKeyDown(event)"
+                aria-label="Your message"
               ></textarea>
 
               <div class="input-actions-right">
-                <button class="action-btn stop" id="stopButton" onclick="stopVoiceInput()" style="display: none;">
+                <button class="action-btn stop" id="stopButton" onclick="stopVoiceInput()" style="display: none;" aria-label="Arrêter">
                   <i class="fas fa-stop"></i>
                 </button>
 
-                <button class="action-btn mic" id="micButton" onclick="toggleVoiceInput()">
+                <button class="action-btn mic" id="micButton" onclick="toggleVoiceInput()" aria-label="Microphone">
                   <i class="fas fa-microphone"></i>
                 </button>
 
-                <button class="btn-send-modern" id="sendBtn" onclick="sendMessage()" disabled>
+                <button class="btn-send-modern" id="sendBtn" onclick="sendMessage()" disabled aria-label="Envoyer">
                   <i class="fas fa-arrow-up"></i>
                 </button>
               </div>
@@ -2106,9 +2208,12 @@
     </main>
   </div>
 
+  <!-- Hidden file input for drag & drop (NEW) -->
+  <input type="file" id="fileInput" style="display: none;" multiple accept="image/*,.pdf,.doc,.docx,.txt" onchange="handleFileSelect(event)">
+
   <script>
     // ============================================
-    // CONFIGURATION CONSTANTS
+    // CONFIGURATION CONSTANTS (CORRECTED)
     // ============================================
     const CONFIG = {
       CHAT: {
@@ -2128,14 +2233,58 @@
     };
 
     // ============================================
+    // SECURE CONFIGURATION (FIXED)
+    // ============================================
+    const RECAPTCHA_SITE_KEY = '6Le6dW0sAAAAAIaf6Aw9v8c28yzEMeWJEiBoZKGF';
+    const API_BASE_URL = window.location.origin;
+    const IS_PRODUCTION = window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
+
+    // ============================================
+    // MULTI-USER SESSION MANAGEMENT (NEW)
+    // ============================================
+    const SESSION_ID = generateSessionId();
+    const STORAGE_PREFIX = `core_${SESSION_ID}_`;
+
+    function generateSessionId() {
+      let sessionId = sessionStorage.getItem('core_session_id');
+      if (!sessionId) {
+        sessionId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        sessionStorage.setItem('core_session_id', sessionId);
+      }
+      return sessionId;
+    }
+
+    function getUserStorage(key, defaultValue = null) {
+      const fullKey = STORAGE_PREFIX + key;
+      try {
+        const value = localStorage.getItem(fullKey);
+        return value ? JSON.parse(value) : defaultValue;
+      } catch (e) {
+        console.warn('Storage error:', e);
+        return defaultValue;
+      }
+    }
+
+    function setUserStorage(key, value) {
+      const fullKey = STORAGE_PREFIX + key;
+      try {
+        localStorage.setItem(fullKey, JSON.stringify(value));
+      } catch (e) {
+        console.warn('Storage error:', e);
+      }
+    }
+
+    // ============================================
     // GLOBAL VARIABLES
     // ============================================
-    let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+    let chatHistory = getUserStorage('chatHistory', []);
     let currentMode = 'chat';
     let isTypingEffectActive = false;
     let isSending = false;
     let isSearching = false;
     let resizeTimeout;
+    let progressInterval;
+    let currentProgress = 0;
     
     const messageIds = new Set();
     
@@ -2154,12 +2303,16 @@
 
     const stopButton = document.getElementById('stopButton');
     const voiceStatus = document.getElementById('voiceStatus');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const progressBar = document.getElementById('progressBar');
+    const inputSection = document.getElementById('inputSection');
+    const fileInput = document.getElementById('fileInput');
     let finalTranscript = '';
 
     // ============================================
     // DEEP THINK MODE
     // ============================================
-    let deepThinkActive = false;
+    let deepThinkActive = getUserStorage('deepThinkMode', false);
     
     function toggleDeepThink() {
       deepThinkActive = !deepThinkActive;
@@ -2170,35 +2323,191 @@
       if (deepThinkActive) {
         badge.classList.remove('hidden');
         inputContainer.classList.add('deep-think-active');
-        showToast('🧠 Mode Réfléchir activé');
-        localStorage.setItem('deepThinkMode', 'true');
+        showToast('🧠 Deep Think mode activated');
+        setUserStorage('deepThinkMode', true);
       } else {
         badge.classList.add('hidden');
         inputContainer.classList.remove('deep-think-active');
-        showToast('⚡ Mode Réfléchir désactivé');
-        localStorage.setItem('deepThinkMode', 'false');
+        showToast('⚡ Deep Think mode deactivated');
+        setUserStorage('deepThinkMode', false);
       }
       
       const floatingMenu = document.getElementById('floatingMenu');
       if (floatingMenu) floatingMenu.classList.add('hidden');
     }
     
-    // Charger la préférence au démarrage
-    try {
-      const savedDeepThink = localStorage.getItem('deepThinkMode');
-      if (savedDeepThink === 'true') {
-        setTimeout(() => {
-          deepThinkActive = true;
-          const badge = document.getElementById('deepThinkBadge');
-          const inputContainer = document.getElementById('inputContainer');
-          if (badge && inputContainer) {
-            badge.classList.remove('hidden');
-            inputContainer.classList.add('deep-think-active');
-          }
-        }, 100);
+    // Load preference
+    if (deepThinkActive) {
+      setTimeout(() => {
+        const badge = document.getElementById('deepThinkBadge');
+        const inputContainer = document.getElementById('inputContainer');
+        if (badge && inputContainer) {
+          badge.classList.remove('hidden');
+          inputContainer.classList.add('deep-think-active');
+        }
+      }, 100);
+    }
+
+    // ============================================
+    // CONNECTION MONITORING (NEW)
+    // ============================================
+    function updateConnectionStatus() {
+      if (navigator.onLine) {
+        connectionStatus.className = 'connection-status online';
+        connectionStatus.innerHTML = '<i class="fas fa-wifi"></i><span>Connecté</span>';
+        connectionStatus.classList.remove('hidden');
+        setTimeout(() => connectionStatus.classList.add('hidden'), 3000);
+      } else {
+        connectionStatus.className = 'connection-status offline';
+        connectionStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>Hors ligne</span>';
+        connectionStatus.classList.remove('hidden');
+        showToast('📡 Vous êtes hors ligne', true);
       }
-    } catch (e) {
-      console.log('LocalStorage not available');
+    }
+
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+    updateConnectionStatus();
+
+    // ============================================
+    // PROGRESS BAR (NEW)
+    // ============================================
+    function startProgress() {
+      currentProgress = 0;
+      progressBar.style.width = '0%';
+      progressBar.style.display = 'block';
+      
+      progressInterval = setInterval(() => {
+        if (currentProgress < 90) {
+          currentProgress += Math.random() * 10;
+          progressBar.style.width = Math.min(currentProgress, 90) + '%';
+        }
+      }, 200);
+    }
+
+    function completeProgress() {
+      clearInterval(progressInterval);
+      progressBar.style.width = '100%';
+      setTimeout(() => {
+        progressBar.style.width = '0%';
+        progressBar.style.display = 'none';
+      }, 300);
+    }
+
+    // ============================================
+    // DRAG & DROP (NEW)
+    // ============================================
+    function setupDragAndDrop() {
+      inputSection.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        inputSection.classList.add('drag-over');
+      });
+
+      inputSection.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        inputSection.classList.remove('drag-over');
+      });
+
+      inputSection.addEventListener('drop', (e) => {
+        e.preventDefault();
+        inputSection.classList.remove('drag-over');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          handleFiles(files);
+        }
+      });
+    }
+
+    function triggerFileUpload() {
+      fileInput.click();
+      toggleFloatingMenu();
+    }
+
+    function handleFileSelect(event) {
+      const files = event.target.files;
+      if (files.length > 0) {
+        handleFiles(files);
+      }
+    }
+
+    async function handleFiles(files) {
+      const file = files[0];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      if (file.size > maxSize) {
+        showToast('❌ Fichier trop grand (max 10MB)', true);
+        return;
+      }
+
+      showToast(`📎 Préparation de ${file.name}...`);
+      
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const base64 = e.target.result.split(',')[1];
+        
+        // Detect file type
+        const fileType = file.type.startsWith('image/') ? 'image' : 'document';
+        
+        // Send to API
+        await sendMessageWithFile(file.name, base64, file.type, fileType);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function sendMessageWithFile(filename, data, mimeType, fileType) {
+      const message = input.value.trim() || `Analyze this ${fileType}: ${filename}`;
+      
+      startProgress();
+      isSending = true;
+      sendBtn.disabled = true;
+      sendBtn.classList.remove('active');
+      
+      addMessage(`${message} [📎 ${filename}]`, 'user');
+      input.value = '';
+      input.style.height = 'auto';
+      
+      showTypingIndicator();
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            file: {
+              name: filename,
+              data,
+              mime: mimeType,
+              type: fileType
+            },
+            deepThink: deepThinkActive
+          })
+        });
+
+        completeProgress();
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        removeTypingIndicator();
+        
+        if (data.reply) {
+          const messageDiv = addMessage(data.reply, 'assistant');
+          if (messageDiv) {
+            const contentDiv = messageDiv.querySelector('.chat-response');
+            if (contentDiv) await typeWriterEffect(contentDiv, data.reply, 12);
+          }
+          if (data.suggestions) showSuggestions(data.suggestions);
+        }
+      } catch (error) {
+        completeProgress();
+        removeTypingIndicator();
+        handleApiError(error, 'file upload');
+      } finally {
+        isSending = false;
+        sendBtn.disabled = input.value.trim() === '';
+        if (input.value.trim() !== '') sendBtn.classList.add('active');
+      }
     }
 
     // ============================================
@@ -2218,7 +2527,7 @@
         updateMicButton();
         micButton.classList.add('listening');
         stopButton.style.display = 'flex';
-        voiceStatus.innerText = '🎤 Écoute...';
+        voiceStatus.innerText = '🎤 Listening...';
         input.classList.add('listening');
       };
       
@@ -2246,7 +2555,7 @@
       };
       
       recognition.onspeechend = function() {
-        voiceStatus.innerText = '⏳ Transcription...';
+        voiceStatus.innerText = '⏳ Transcribing...';
       };
       
       recognition.onend = function() {
@@ -2265,27 +2574,27 @@
         stopButton.style.display = 'none';
         input.classList.remove('listening', 'streaming');
         
-        let errorMessage = '❌ Erreur micro';
+        let errorMessage = '❌ Microphone error';
         switch(event.error) {
           case 'no-speech':
-            errorMessage = '❌ Aucune parole détectée';
-            voiceStatus.innerText = '❌ Aucune parole détectée';
+            errorMessage = '❌ No speech detected';
+            voiceStatus.innerText = '❌ No speech detected';
             break;
           case 'audio-capture':
-            errorMessage = '❌ Microphone non trouvé';
-            voiceStatus.innerText = '❌ Microphone non trouvé';
+            errorMessage = '❌ Microphone not found';
+            voiceStatus.innerText = '❌ Microphone not found';
             break;
           case 'not-allowed':
-            errorMessage = '❌ Accès au microphone refusé';
-            voiceStatus.innerText = '❌ Accès au microphone refusé';
+            errorMessage = '❌ Microphone access denied';
+            voiceStatus.innerText = '❌ Microphone access denied';
             break;
           case 'network':
-            errorMessage = '❌ Erreur réseau';
-            voiceStatus.innerText = '❌ Erreur réseau';
+            errorMessage = '❌ Network error';
+            voiceStatus.innerText = '❌ Network error';
             break;
           default:
-            errorMessage = `❌ Erreur: ${event.error}`;
-            voiceStatus.innerText = `❌ Erreur: ${event.error}`;
+            errorMessage = `❌ Error: ${event.error}`;
+            voiceStatus.innerText = `❌ Error: ${event.error}`;
         }
         
         showToast(errorMessage, true);
@@ -2424,21 +2733,25 @@
 
     function toggleDarkMode() {
       document.body.classList.toggle('dark');
-      localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+      setUserStorage('darkMode', document.body.classList.contains('dark'));
       const icon = document.querySelector('.fa-moon');
       if (document.body.classList.contains('dark')) {
-        icon.classList.remove('fa-moon');
-        icon.classList.add('fa-sun');
+        icon?.classList.remove('fa-moon');
+        icon?.classList.add('fa-sun');
       } else {
-        icon.classList.remove('fa-sun');
-        icon.classList.add('fa-moon');
+        icon?.classList.remove('fa-sun');
+        icon?.classList.add('fa-moon');
       }
     }
 
-    if (localStorage.getItem('darkMode') === 'true') {
+    // Load dark mode preference
+    if (getUserStorage('darkMode', false)) {
       document.body.classList.add('dark');
-      document.querySelector('.fa-moon').classList.add('fa-sun');
-      document.querySelector('.fa-moon').classList.remove('fa-moon');
+      const icon = document.querySelector('.fa-moon');
+      if (icon) {
+        icon.classList.add('fa-sun');
+        icon.classList.remove('fa-moon');
+      }
     }
 
     function switchMode(mode) {
@@ -2505,22 +2818,45 @@
     }
 
     function handleKeyDown(e) {
-      if (e.key === 'Enter') {
-        if (e.shiftKey) {
-          return;
-        } else {
-          const message = input.value.trim();
-          if (message !== '') {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const message = input.value.trim();
+        if (message !== '' && !isSending && !isTypingEffectActive && !isSearching) {
+          sendMessage();
+        }
+      }
+      
+      // Keyboard shortcuts (NEW)
+      if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+          case 'k':
             e.preventDefault();
-            if (!isSending && !isTypingEffectActive && !isSearching) {
-              sendMessage();
-            }
-          }
+            input.focus();
+            break;
+          case 'n':
+            e.preventDefault();
+            newChat();
+            break;
+          case 'd':
+            e.preventDefault();
+            toggleDarkMode();
+            break;
+          case 'p':
+            e.preventDefault();
+            switchMode('proposal');
+            break;
+          case 'c':
+            e.preventDefault();
+            switchMode('chat');
+            break;
         }
       }
     }
 
-    async function performUniversalSearch(query) {
+    // ============================================
+    // UNIVERSAL SEARCH with fallback (FIXED)
+    // ============================================
+    window.performUniversalSearch = window.performUniversalSearch || async function(query) {
       if (!query || isSearching) return;
       isSearching = true;
       
@@ -2534,7 +2870,7 @@
         <div class="message-content">
           <div class="search-loader">
             <span></span><span></span><span></span>
-            <span style="margin-left: 8px;">Recherche...</span>
+            <span style="margin-left: 8px;">Searching...</span>
           </div>
         </div>
       `;
@@ -2542,10 +2878,10 @@
       smartScroll();
       
       try {
-        const response = await fetch('/api/searchUnified', {
+        const response = await fetch(`${API_BASE_URL}/api/searchUnified`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query })
+          body: JSON.stringify({ query, deepThink: deepThinkActive })
         });
         
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -2561,11 +2897,11 @@
       } catch (error) {
         document.getElementById('searchLoader')?.remove();
         console.error('Search error:', error);
-        addMessage("⚠️ Recherche temporairement indisponible. Veuillez réessayer plus tard.", 'assistant');
+        addMessage("🔍 Search temporarily unavailable. Please try again.", 'assistant');
       } finally {
         isSearching = false;
       }
-    }
+    };
 
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');
@@ -2599,7 +2935,7 @@
 
     function toggleVoiceInput() {
       if (!recognition) {
-        showToast('❌ Reconnaissance vocale non supportée', true);
+        showToast('❌ Speech recognition not supported', true);
         return;
       }
       
@@ -2621,12 +2957,12 @@
                 recognition.stop();
                 setTimeout(() => recognition.start(), 100);
               } else {
-                showToast('❌ Impossible de démarrer le microphone', true);
+                showToast('❌ Cannot start microphone', true);
               }
             }
           })
           .catch(function(err) {
-            showToast('❌ Accès au microphone refusé', true);
+            showToast('❌ Microphone access denied', true);
             micButton.classList.add('permission-denied');
           });
       }
@@ -2639,7 +2975,7 @@
         updateMicButton();
         micButton.classList.remove('listening');
         stopButton.style.display = 'none';
-        voiceStatus.innerText = '⏳ Transcription...';
+        voiceStatus.innerText = '⏳ Transcribing...';
         input.classList.remove('listening');
         
         if (input.value.trim() !== '') {
@@ -2693,7 +3029,7 @@
           <i class="fas fa-robot"></i>
         </div>
         <div class="typing-indicator">
-          <span>Assistant écrit</span>
+          <span>Assistant typing</span>
           <div class="typing-dots">
             <span></span><span></span><span></span>
           </div>
@@ -2717,11 +3053,7 @@
     function updateAutoScrollState() {
       autoScrollEnabled = isNearBottom();
       if (scrollButton) {
-        if (autoScrollEnabled) {
-          scrollButton.style.display = 'none';
-        } else {
-          scrollButton.style.display = 'flex';
-        }
+        scrollButton.style.display = autoScrollEnabled ? 'none' : 'flex';
       }
     }
 
@@ -2747,7 +3079,7 @@
       if (scrollButton) return;
       scrollButton = document.createElement('button');
       scrollButton.className = 'scroll-to-bottom-btn';
-      scrollButton.innerHTML = '<i class="fas fa-arrow-down"></i> Nouveaux messages';
+      scrollButton.innerHTML = '<i class="fas fa-arrow-down"></i> New messages';
       scrollButton.onclick = forceScrollToBottom;
       scrollButton.style.display = 'none';
       document.body.appendChild(scrollButton);
@@ -2866,7 +3198,7 @@
         ${avatar}
         <div class="message-content">${contentHTML}</div>
         <div class="message-footer">
-          <span>${sender === 'user' ? 'Vous' : 'Assistant'}</span>
+          <span>${sender === 'user' ? 'You' : 'Assistant'}</span>
           <span>•</span>
           <span>${time}</span>
         </div>
@@ -2878,10 +3210,10 @@
         const footer = messageDiv.querySelector('.message-footer');
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-btn';
-        copyBtn.innerHTML = '<i class="far fa-copy"></i> Copier';
+        copyBtn.innerHTML = '<i class="far fa-copy"></i> Copy';
         copyBtn.onclick = () => {
           navigator.clipboard.writeText(content.replace(/<[^>]*>/g, '')).then(() => {
-            showToast('✓ Copié dans le presse-papier !');
+            showToast('✓ Copied to clipboard!');
           });
         };
         footer.appendChild(copyBtn);
@@ -2892,7 +3224,7 @@
         if (chatHistory.length > CONFIG.CHAT.MAX_STORED_MESSAGES) {
           chatHistory = chatHistory.slice(-CONFIG.CHAT.MAX_STORED_MESSAGES);
         }
-        localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+        setUserStorage('chatHistory', chatHistory);
       }
       
       smartScroll();
@@ -2912,10 +3244,9 @@
     // ============================================
     
     function analyseChartDescription(description) {
-      console.log('📊 Analyse détaillée de:', description);
+      console.log('📊 Analyzing:', description);
       const lowerDesc = description.toLowerCase();
       
-      // 1️⃣ DÉTECTION DU TYPE DE GRAPHIQUE
       let type = 'bar';
       if (lowerDesc.includes('pie') || lowerDesc.includes('circulaire') || lowerDesc.includes('secteurs')) {
         type = 'pie';
@@ -2927,21 +3258,20 @@
         type = 'bar';
       }
       
-      // 2️⃣ DÉTECTION DES COULEURS
       let primaryColor = '#2563eb';
       let secondaryColor = '#3b82f6';
       let gradient = lowerDesc.includes('dégradé') || lowerDesc.includes('gradient');
       
-      if (lowerDesc.includes('bleu')) {
+      if (lowerDesc.includes('bleu') || lowerDesc.includes('blue')) {
         primaryColor = '#1e3a8a';
         secondaryColor = '#93c5fd';
-      } else if (lowerDesc.includes('rouge')) {
+      } else if (lowerDesc.includes('rouge') || lowerDesc.includes('red')) {
         primaryColor = '#991b1b';
         secondaryColor = '#fca5a5';
-      } else if (lowerDesc.includes('vert')) {
+      } else if (lowerDesc.includes('vert') || lowerDesc.includes('green')) {
         primaryColor = '#166534';
         secondaryColor = '#86efac';
-      } else if (lowerDesc.includes('violet')) {
+      } else if (lowerDesc.includes('violet') || lowerDesc.includes('purple')) {
         primaryColor = '#6b21a8';
         secondaryColor = '#d8b4fe';
       } else if (lowerDesc.includes('orange')) {
@@ -2949,26 +3279,23 @@
         secondaryColor = '#fdba74';
       }
       
-      // 3️⃣ DÉTECTION DES STYLES
       let rounded = lowerDesc.includes('arrondi') || lowerDesc.includes('rounded');
       let shadow = lowerDesc.includes('ombre') || lowerDesc.includes('shadow');
       let animation = lowerDesc.includes('animation') || lowerDesc.includes('animé');
-      let title = "Graphique";
+      let title = "Chart";
       
       const titleMatch = description.match(/["“]([^"”]+)["”]/);
       if (titleMatch) title = titleMatch[1];
       
-      // 4️⃣ DÉTECTION DES DONNÉES
-      let labels = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin"];
+      let labels = ["January", "February", "March", "April", "May", "June"];
       let data = [65, 59, 80, 81, 56, 75];
       
       const dataMatch = description.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)[,\s]*(\d*)/);
       if (dataMatch) {
         data = dataMatch.slice(1).filter(v => v).map(v => parseInt(v));
-        labels = data.map((_, i) => `Élément ${i+1}`);
+        labels = data.map((_, i) => `Item ${i+1}`);
       }
       
-      // 5️⃣ CRÉATION DU GRAPHIQUE
       addMessage(`📊 ${description}`, 'user');
       createStyledChart(type, labels, data, {
         primaryColor,
@@ -2983,8 +3310,8 @@
 
     function createStyledChart(type, labels, data, style) {
       if (typeof Chart === 'undefined') {
-        showToast("⚠️ Chart.js non chargé", true);
-        addMessage("❌ Graphique indisponible", 'assistant');
+        showToast("⚠️ Chart.js not loaded", true);
+        addMessage("❌ Chart unavailable", 'assistant');
         return;
       }
       
@@ -3077,7 +3404,7 @@
           data: {
             labels: labels,
             datasets: [{
-              label: 'Valeurs',
+              label: 'Values',
               data: data,
               backgroundColor: backgroundColor,
               borderColor: style.primaryColor,
@@ -3113,30 +3440,63 @@
       }
       
       menu.innerHTML = `
-        <h3 style="margin:0 0 15px; text-align:center;">Choisir un graphique</h3>
+        <h3 style="margin:0 0 15px; text-align:center;">Choose a chart</h3>
         <button onclick="analyseChartDescription('bar chart'); this.parentElement.remove();" 
           style="display:block; width:100%; padding:10px; margin:5px 0; background:#f0f4ff; border:none; border-radius:8px; cursor:pointer;">
-          📊 Graphique à barres
+          📊 Bar chart
         </button>
         <button onclick="analyseChartDescription('line chart'); this.parentElement.remove();" 
           style="display:block; width:100%; padding:10px; margin:5px 0; background:#f0f4ff; border:none; border-radius:8px; cursor:pointer;">
-          📈 Graphique linéaire
+          📈 Line chart
         </button>
         <button onclick="analyseChartDescription('pie chart'); this.parentElement.remove();" 
           style="display:block; width:100%; padding:10px; margin:5px 0; background:#f0f4ff; border:none; border-radius:8px; cursor:pointer;">
-          🥧 Graphique circulaire
+          🥧 Pie chart
         </button>
         <button onclick="analyseChartDescription('doughnut chart'); this.parentElement.remove();" 
           style="display:block; width:100%; padding:10px; margin:5px 0; background:#f0f4ff; border:none; border-radius:8px; cursor:pointer;">
-          🍩 Graphique en anneau
+          🍩 Doughnut chart
         </button>
         <button onclick="this.parentElement.remove()" 
           style="display:block; width:100%; padding:8px; margin-top:15px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer;">
-          Fermer
+          Close
         </button>
       `;
       
       document.body.appendChild(menu);
+    }
+
+    // ============================================
+    // ERROR HANDLER (NEW)
+    // ============================================
+    function handleApiError(error, context = 'API call') {
+      console.error(`❌ Error in ${context}:`, error);
+      
+      let errorMessage = "I'm having trouble connecting. Please try again.";
+      
+      if (error.name === 'AbortError') {
+        errorMessage = "⏱️ Request timeout. Please try a simpler question.";
+      } else if (!navigator.onLine) {
+        errorMessage = "📡 You're offline. Please check your internet connection.";
+      } else if (error.response) {
+        switch(error.response.status) {
+          case 429:
+            errorMessage = "🔄 Too many requests. Please wait a moment.";
+            break;
+          case 503:
+          case 504:
+            errorMessage = "🔧 Service temporarily unavailable. Please try again later.";
+            break;
+          case 401:
+          case 403:
+            errorMessage = "🔒 Authentication error. Please contact support.";
+            break;
+          default:
+            errorMessage = `⚠️ Server error (${error.response.status}). Please try again.`;
+        }
+      }
+      
+      addMessage(errorMessage, 'assistant');
     }
 
     // ============================================
@@ -3149,7 +3509,7 @@
         return;
       }
 
-      // 🎯 DÉTECTION DE DEMANDE DE GRAPHIQUE
+      // Chart detection
       const lowerMsg = message.toLowerCase();
       const chartKeywords = ['chart', 'graph', 'pie', 'bar', 'line', 'doughnut', 'graphique', 'camembert'];
       if (chartKeywords.some(keyword => lowerMsg.includes(keyword))) {
@@ -3160,7 +3520,7 @@
         return;
       }
 
-      // Détection de recherche web
+      // Web search detection
       function needsWebSearch(query) {
         const lowerQuery = query.toLowerCase();
         const searchTriggers = [
@@ -3169,20 +3529,21 @@
           'price', 'rate', 'stock', 'bitcoin', 'crypto', 'ethereum',
           'near me', 'close to', 'around', 'restaurant', 'hotel', 'store', 'where to find',
           'weather', 'temperature', 'rain', 'sun', 'wind', 'météo',
-          'today', 'now', 'currently', 'live', 'aujourd\'hui', 'maintenant',
+          'today', 'now', 'currently', 'live', 'today', 'now',
           'search', 'find', 'look for', 'chercher', 'trouver'
         ];
         return searchTriggers.some(trigger => lowerQuery.includes(trigger));
       }
 
       if (needsWebSearch(message)) {
-        performUniversalSearch(message);
+        window.performUniversalSearch(message);
         input.value = '';
         input.style.height = 'auto';
         handleInput();
         return;
       }
 
+      startProgress();
       isSending = true;
       sendBtn.disabled = true;
       sendBtn.classList.remove('active');
@@ -3205,13 +3566,14 @@
         const timeoutId = setTimeout(() => {
           controller.abort();
           removeTypingIndicator();
-          addMessage("⏱️ Délai d'attente dépassé. Veuillez réessayer.", 'assistant');
+          completeProgress();
+          addMessage("⏱️ Request timeout. Please try again.", 'assistant');
           isSending = false;
           sendBtn.disabled = false;
           if (input.value.trim() !== '') sendBtn.classList.add('active');
         }, 30000);
 
-        const response = await fetch('/api/chat', {
+        const response = await fetch(`${API_BASE_URL}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -3223,6 +3585,7 @@
         });
         
         clearTimeout(timeoutId);
+        completeProgress();
         
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
@@ -3237,13 +3600,9 @@
           if (data.suggestions) showSuggestions(data.suggestions);
         }
       } catch (error) {
+        completeProgress();
         removeTypingIndicator();
-        if (error.name === 'AbortError') {
-          addMessage("⏱️ Délai d'attente dépassé. Veuillez réessayer.", 'assistant');
-        } else {
-          addMessage("Je rencontre des difficultés de connexion. Veuillez réessayer.", 'assistant');
-        }
-        console.error('Chat error:', error);
+        handleApiError(error, 'chat');
       } finally {
         isSending = false;
         sendBtn.disabled = input.value.trim() === '';
@@ -3258,12 +3617,12 @@
     }
 
     function showHistory() {
-      showToast('Fonctionnalité d\'historique bientôt disponible !');
+      showToast('📋 History feature coming soon!');
       closeSidebar();
     }
 
     function showSettings() {
-      showToast('Paramètres bientôt disponibles !');
+      showToast('⚙️ Settings coming soon!');
       closeSidebar();
     }
 
@@ -3276,11 +3635,11 @@
       switch(action) {
         case 'chat': switchMode('chat'); break;
         case 'proposal': switchMode('proposal'); break;
-        default: showToast(`${action} bientôt disponible !`);
+        default: showToast(`${action} coming soon!`);
       }
     }
 
-    // ✅ CORRECTION : FERMETURE DU MENU FLOTTANT
+    // Close floating menu when clicking outside
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.plus-menu-wrapper') && !e.target.closest('.floating-menu-modern')) {
         document.getElementById('floatingMenu').classList.add('hidden');
@@ -3292,11 +3651,11 @@
       messagesWrapper.innerHTML = '';
       chatHistory = [];
       messageIds.clear();
-      localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+      setUserStorage('chatHistory', []);
       suggestionsSection.classList.remove('hidden');
       conversationArea.classList.add('hidden');
       suggestionsContainer.classList.add('hidden');
-      showToast('Nouvelle conversation démarrée');
+      showToast('✨ New conversation started');
       closeSidebar();
       setTimeout(() => initResizeObserver(), 100);
     }
@@ -3304,34 +3663,34 @@
     function fillExample(type) {
       const examples = {
         developer: {
-          job: "Développeur Frontend",
+          job: "Frontend Developer",
           skills: "React, TypeScript, Tailwind CSS",
-          languages: "Français (courant)",
-          description: "Je recherche un développeur React senior pour créer un tableau de bord avec visualisation de données en temps réel. Expérience requise avec React moderne et gestion d'état."
+          languages: "English, French",
+          description: "Looking for a senior React developer to create a dashboard with real-time data visualization. Experience with modern React and state management required."
         },
         designer: {
-          job: "Designer UI/UX",
-          skills: "Figma, Adobe XD, Recherche utilisateur",
-          languages: "Français (professionnel)",
-          description: "Besoin d'un designer pour créer une interface d'application mobile pour une startup fitness. Design moderne, minimaliste et convivial."
+          job: "UI/UX Designer",
+          skills: "Figma, Adobe XD, User Research",
+          languages: "English",
+          description: "Need a designer to create a mobile app interface for a fitness startup. Modern, minimalist, and user-friendly design."
         },
         writer: {
-          job: "Rédacteur de contenu",
-          skills: "SEO, Articles de blog, Rédaction technique",
-          languages: "Français (natif)",
-          description: "Je recherche un rédacteur pour créer des articles de blog hebdomadaires sur les SaaS et la technologie. Doit comprendre le SEO et les audiences B2B."
+          job: "Content Writer",
+          skills: "SEO, Blog Posts, Technical Writing",
+          languages: "English (Native)",
+          description: "Looking for a writer to create weekly blog posts about SaaS and technology. Must understand SEO and B2B audiences."
         },
         translator: {
-          job: "Traducteur",
-          skills: "Anglais vers Français, Espagnol vers Français",
-          languages: "Français (natif), Anglais (courant), Espagnol (avancé)",
-          description: "Besoin d'un traducteur pour des documents juridiques de l'anglais vers le français. Doit être précis et expérimenté avec la terminologie juridique."
+          job: "Translator",
+          skills: "English to French, Spanish to French",
+          languages: "French (Native), English, Spanish",
+          description: "Need a translator for legal documents from English to French. Must be accurate and experienced with legal terminology."
         },
         marketing: {
-          job: "Spécialiste Marketing",
-          skills: "Réseaux sociaux, Google Ads, Stratégie de contenu",
-          languages: "Français (courant)",
-          description: "Je recherche un expert en marketing pour aider au lancement d'un nouveau produit SaaS. Besoin d'une stratégie pour les réseaux sociaux et les publicités payantes."
+          job: "Marketing Specialist",
+          skills: "Social Media, Google Ads, Content Strategy",
+          languages: "English, French",
+          description: "Looking for a marketing expert to help launch a new SaaS product. Need strategy for social media and paid ads."
         }
       };
       const ex = examples[type];
@@ -3344,6 +3703,26 @@
       }
     }
 
+    // Initialize reCAPTCHA (FIXED)
+    let recaptchaWidgetId = null;
+    
+    function initRecaptcha() {
+      if (typeof grecaptcha !== 'undefined' && grecaptcha.render) {
+        try {
+          recaptchaWidgetId = grecaptcha.render('recaptchaContainer', {
+            'sitekey': RECAPTCHA_SITE_KEY,
+            'theme': document.body.classList.contains('dark') ? 'dark' : 'light'
+          });
+        } catch (e) {
+          console.warn('reCAPTCHA render error:', e);
+        }
+      } else {
+        setTimeout(initRecaptcha, 500);
+      }
+    }
+
+    setTimeout(initRecaptcha, 1000);
+
     async function generateProposal() {
       const job = document.getElementById('job').value;
       const skills = document.getElementById('skills').value;
@@ -3355,26 +3734,32 @@
       const length = document.getElementById('length').value;
       const language = document.getElementById('language').value;
 
-      const recaptchaResponse = grecaptcha.getResponse();
+      let recaptchaResponse = '';
+      if (typeof grecaptcha !== 'undefined' && recaptchaWidgetId !== null) {
+        recaptchaResponse = grecaptcha.getResponse(recaptchaWidgetId);
+      }
+
       if (!recaptchaResponse) {
-        showToast('Veuillez compléter le reCAPTCHA', true);
+        showToast('Please complete the reCAPTCHA', true);
         return;
       }
 
       if (!job || !skills || !description) {
-        showToast('Veuillez remplir les champs requis', true);
+        showToast('Please fill in required fields', true);
         return;
       }
 
       document.getElementById('results').innerHTML = `
         <div class="bg-white rounded-xl p-8 text-center">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p class="text-gray-600">L'IA rédige vos propositions...</p>
+          <p class="text-gray-600">AI is writing your proposals...</p>
         </div>
       `;
 
+      startProgress();
+
       try {
-        const response = await fetch('/api/generate', {
+        const response = await fetch(`${API_BASE_URL}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3383,15 +3768,18 @@
           })
         });
 
+        completeProgress();
+
         const data = await response.json();
         if (data.error) throw new Error(data.error);
         displayResults(data);
         saveToHistory(data);
       } catch (error) {
+        completeProgress();
         document.getElementById('results').innerHTML = `
           <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-700">
             <i class="fas fa-exclamation-triangle text-3xl mb-3"></i>
-            <p>Une erreur s'est produite. Veuillez réessayer.</p>
+            <p>An error occurred. Please try again.</p>
           </div>
         `;
       }
@@ -3403,12 +3791,12 @@
       html += `
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h3 class="font-semibold"><i class="fas fa-briefcase text-blue-500 mr-2"></i>Proposition Professionnelle</h3>
+            <h3 class="font-semibold"><i class="fas fa-briefcase text-blue-500 mr-2"></i>Professional Proposal</h3>
             <div class="flex items-center gap-3">
-              <button onclick="copyText('professional')" class="text-gray-500 hover:text-blue-600" title="Copier">
+              <button onclick="copyText('professional')" class="text-gray-500 hover:text-blue-600" title="Copy">
                 <i class="far fa-copy"></i>
               </button>
-              <button onclick="downloadPDF('professional', 'Proposition Professionnelle')" class="text-gray-500 hover:text-blue-600" title="Télécharger PDF">
+              <button onclick="downloadPDF('professional', 'Professional Proposal')" class="text-gray-500 hover:text-blue-600" title="Download PDF">
                 <i class="fas fa-file-pdf"></i>
               </button>
               <div class="flex gap-1 ml-2 border-l border-gray-300 pl-2">
@@ -3424,12 +3812,12 @@
       html += `
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h3 class="font-semibold"><i class="fas fa-compress text-blue-500 mr-2"></i>Version Courte</h3>
+            <h3 class="font-semibold"><i class="fas fa-compress text-blue-500 mr-2"></i>Short Version</h3>
             <div class="flex items-center gap-3">
-              <button onclick="copyText('short')" class="text-gray-500 hover:text-blue-600" title="Copier">
+              <button onclick="copyText('short')" class="text-gray-500 hover:text-blue-600" title="Copy">
                 <i class="far fa-copy"></i>
               </button>
-              <button onclick="downloadPDF('short', 'Proposition Courte')" class="text-gray-500 hover:text-blue-600" title="Télécharger PDF">
+              <button onclick="downloadPDF('short', 'Short Proposal')" class="text-gray-500 hover:text-blue-600" title="Download PDF">
                 <i class="fas fa-file-pdf"></i>
               </button>
               <div class="flex gap-1 ml-2 border-l border-gray-300 pl-2">
@@ -3445,12 +3833,12 @@
       html += `
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h3 class="font-semibold"><i class="fas fa-fire text-blue-500 mr-2"></i>Version Persuasive</h3>
+            <h3 class="font-semibold"><i class="fas fa-fire text-blue-500 mr-2"></i>Persuasive Version</h3>
             <div class="flex items-center gap-3">
-              <button onclick="copyText('persuasive')" class="text-gray-500 hover:text-blue-600" title="Copier">
+              <button onclick="copyText('persuasive')" class="text-gray-500 hover:text-blue-600" title="Copy">
                 <i class="far fa-copy"></i>
               </button>
-              <button onclick="downloadPDF('persuasive', 'Proposition Persuasive')" class="text-gray-500 hover:text-blue-600" title="Télécharger PDF">
+              <button onclick="downloadPDF('persuasive', 'Persuasive Proposal')" class="text-gray-500 hover:text-blue-600" title="Download PDF">
                 <i class="fas fa-file-pdf"></i>
               </button>
               <div class="flex gap-1 ml-2 border-l border-gray-300 pl-2">
@@ -3467,23 +3855,23 @@
     }
 
     function saveToHistory(data) {
-      let history = JSON.parse(localStorage.getItem('proposalHistory')) || [];
+      let history = getUserStorage('proposalHistory', []);
       history.unshift({
         date: new Date().toLocaleString(),
         professional: data.professional.substring(0, 100) + '...',
         fullData: data
       });
       history = history.slice(0, CONFIG.PROPOSAL.HISTORY_LIMIT);
-      localStorage.setItem('proposalHistory', JSON.stringify(history));
+      setUserStorage('proposalHistory', history);
       displayHistory();
     }
 
     function displayHistory() {
-      const history = JSON.parse(localStorage.getItem('proposalHistory')) || [];
+      const history = getUserStorage('proposalHistory', []);
       const historyDiv = document.getElementById('historyList');
       
       if (history.length === 0) {
-        historyDiv.innerHTML = '<p class="text-gray-400 text-sm">Aucun historique. Générez votre première proposition !</p>';
+        historyDiv.innerHTML = '<p class="text-gray-400 text-sm">No history yet. Generate your first proposal!</p>';
         return;
       }
       
@@ -3493,7 +3881,7 @@
           <div class="history-item" onclick="loadFromHistory(${index})">
             <div class="flex justify-between items-center mb-1">
               <span class="text-xs text-gray-500"><i class="far fa-clock mr-1"></i>${item.date}</span>
-              <span class="text-blue-500 text-xs"><i class="fas fa-redo-alt mr-1"></i> Charger</span>
+              <span class="text-blue-500 text-xs"><i class="fas fa-redo-alt mr-1"></i> Load</span>
             </div>
             <p class="text-gray-700">${item.professional}</p>
           </div>
@@ -3504,34 +3892,34 @@
     }
 
     function loadFromHistory(index) {
-      const history = JSON.parse(localStorage.getItem('proposalHistory')) || [];
+      const history = getUserStorage('proposalHistory', []);
       if (history[index] && history[index].fullData) {
         displayResults(history[index].fullData);
-        showToast('✓ Proposition chargée depuis l\'historique');
+        showToast('✓ Proposal loaded from history');
         switchMode('proposal');
       }
     }
 
     function clearHistory() {
-      if (confirm('Effacer tout l\'historique ?')) {
-        localStorage.removeItem('proposalHistory');
+      if (confirm('Clear all history?')) {
+        setUserStorage('proposalHistory', []);
         displayHistory();
-        showToast('✓ Historique effacé');
+        showToast('✓ History cleared');
       }
     }
 
     function copyText(id) {
       const text = document.getElementById(id).innerText;
       navigator.clipboard.writeText(text).then(() => {
-        showToast('✓ Copié dans le presse-papier !');
+        showToast('✓ Copied to clipboard!');
       }).catch(() => {
-        showToast('Échec de la copie. Veuillez sélectionner manuellement.', true);
+        showToast('Failed to copy. Please select manually.', true);
       });
     }
 
     function downloadPDF(elementId, title) {
       const element = document.getElementById(elementId);
-      const toast = showToast('📄 Préparation du PDF...', false, true);
+      const toast = showToast('📄 Preparing PDF...', false, true);
       
       try {
         const { jsPDF } = window.jspdf;
@@ -3552,7 +3940,7 @@
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 100, 100);
-        doc.text(`Généré le: ${new Date().toLocaleString()}`, 20, 45);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 45);
         doc.setDrawColor(37, 99, 235);
         doc.line(20, 50, 190, 50);
         doc.setFontSize(11);
@@ -3560,9 +3948,9 @@
         const splitText = doc.splitTextToSize(text, 170);
         doc.text(splitText, 20, 60);
         doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
-        showToast('✓ PDF téléchargé avec succès !');
+        showToast('✓ PDF downloaded successfully!');
       } catch (error) {
-        showToast('❌ Échec de la génération PDF', true);
+        showToast('❌ PDF generation failed', true);
       } finally {
         if (toast && toast.parentNode) toast.remove();
       }
@@ -3570,15 +3958,15 @@
 
     function feedback(proposalId, type) {
       const proposalText = document.getElementById(proposalId).innerText;
-      let feedbacks = JSON.parse(localStorage.getItem('feedbacks')) || [];
+      let feedbacks = getUserStorage('feedbacks', []);
       feedbacks.push({
         proposal: proposalText.substring(0, 100) + '...',
         type: type,
         date: new Date().toISOString()
       });
       if (feedbacks.length > 50) feedbacks = feedbacks.slice(-50);
-      localStorage.setItem('feedbacks', JSON.stringify(feedbacks));
-      showToast(`✓ Merci pour votre retour ${type} !`);
+      setUserStorage('feedbacks', feedbacks);
+      showToast(`✓ Thank you for your feedback ${type}!`);
     }
 
     function showToast(message, isError = false, persistent = false) {
@@ -3646,10 +4034,18 @@
       e.stopPropagation();
       if (!sendBtn.disabled && input.value.trim() !== '') sendMessage();
     });
-    
-    window.setSearchMode = null;
-    window.performSearch = null;
-    window.performUniversalSearch = performUniversalSearch;
+
+    // Setup drag & drop
+    setupDragAndDrop();
+
+    // Update reCAPTCHA theme when dark mode changes
+    const originalToggleDarkMode = toggleDarkMode;
+    toggleDarkMode = function() {
+      originalToggleDarkMode();
+      if (typeof grecaptcha !== 'undefined' && recaptchaWidgetId !== null) {
+        grecaptcha.reset(recaptchaWidgetId);
+      }
+    };
   </script>
 </body>
-</html>
+  </html>
