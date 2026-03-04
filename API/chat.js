@@ -1,42 +1,37 @@
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-  // cors
-  res.setheader('access-control-allow-origin', '*');
-  res.setheader('access-control-allow-methods', 'post, options');
-  res.setheader('access-control-allow-headers', 'content-type');
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'options') {
+  if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'post') {
-    return res.status(405).json({ error: 'method not allowed' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { message, history, system, image, file, deepthink = false } = req.body;
+    const { message, history, system, model = 'fast' } = req.body;
 
-    if (!message && !image && !file) {
-      return res.status(400).json({ error: 'message or file required' });
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
     }
 
-    // ✅ vérification des clés api
-    const hasopenrouter = !!process.env.openrouter_api_key;
-    const hasgemini = !!process.env.gemini_api_key;
-    
-    console.log(`🔑 apis: ${hasopenrouter ? '✅ openrouter' : '❌'} ${hasgemini ? '✅ gemini' : '❌'}`);
-    console.log(`🧠 deep think: ${deepthink ? 'active' : 'inactive'}`);
-
-    if (!hasopenrouter && !hasgemini) {
-      return res.json({
-        reply: "<p>😅 no api available. use charts instead!</p>",
-        suggestions: ["📊 pie chart", "📈 bar chart", "📉 line chart"]
+    // ✅ Vérification OpenRouter
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.error('❌ OpenRouter API key missing');
+      return res.status(500).json({ 
+        reply: "<p>⚠️ Service temporarily unavailable. Please try again later.</p>",
+        suggestions: ["Try again", "Write a proposal", "Find clients"]
       });
     }
 
-    // ✅ sanitization
-    const sanitizemessage = (msg) => {
+    // ✅ Sanitization
+    const sanitizeMessage = (msg) => {
       if (!msg || typeof msg !== 'string') return '';
       return msg
         .replace(/<[^>]*>/g, '')
@@ -45,340 +40,327 @@ module.exports = async (req, res) => {
         .substring(0, 4000);
     };
 
-    const cleanmessage = message ? sanitizemessage(message) : '';
+    const cleanMessage = sanitizeMessage(message);
 
-    // ✅ détection de la langue
-    const detectlanguage = (text) => {
+    // ✅ Détection de la langue
+    const detectLanguage = (text) => {
       const patterns = {
         fr: /[éèêëàâäôöùûüçîï]|\b(je|tu|il|elle|nous|vous|ils|elles|le|la|les|un|une|des|et|ou|mais|donc|car|pour|dans|sur|avec|sans|chez|quoi|qui|que|quoi|dont|où)\b/i,
         es: /[áéíóúñü]|\b(hola|gracias|por favor|como|qué|quién|dónde|cuándo|por qué|el|la|los|las|un|una|unos|unas|y|o|pero|porque|con|sin|sobre|entre)\b/i,
-        de: /[äöüß]|\b(ich|du|er|sie|es|wir|ihr|sie|der|die|das|ein|eine|und|oder|aber|weil|denn|mit|ohne|auf|über|unter)\b/i,
+        de: /[äöüß]|\b(ich|du|er|sie|es|wir|ihr|Sie|der|die|das|ein|eine|und|oder|aber|weil|denn|mit|ohne|auf|über|unter)\b/i,
         it: /[àèéìíîòóùú]|\b(io|tu|lui|lei|noi|voi|loro|il|la|i|gli|le|un|uno|una|e|o|ma|perché|con|senza|su|sotto|tra)\b/i,
         pt: /[áâãàçéêíóôõú]|\b(eu|tu|ele|ela|nós|vós|eles|elas|o|a|os|as|um|uma|uns|umas|e|ou|mas|porque|com|sem|sobre|entre)\b/i
       };
       
-      for (const [lang, pattern] of object.entries(patterns)) {
+      for (const [lang, pattern] of Object.entries(patterns)) {
         if (pattern.test(text)) return lang;
       }
       return 'en';
     };
 
-    const detectedlang = detectlanguage(cleanmessage || message || "hello");
-    console.log(`🌐 langue détectée: ${detectedlang}`);
+    const detectedLang = detectLanguage(cleanMessage);
+    console.log(`🌐 Langue détectée: ${detectedLang}`);
 
     // ============================================
-    // fonctions de détection
+    // 🎯 FONCTIONS DE DÉTECTION
     // ============================================
-    function needswebsearch(query) {
-      if (!query) return false;
-      const lowerquery = query.tolowercase();
+    function needsWebSearch(query) {
+      const lowerQuery = query.toLowerCase();
       
-      const searchtriggers = [
-        'news', 'breaking', 'recent', 'latest',
-        'result', 'score', 'match', 'election', 'vote',
-        'price', 'rate', 'stock', 'bitcoin', 'crypto',
-        'near me', 'weather', 'temperature',
-        'today', 'now', 'currently', 'live',
-        'search', 'find', 'look for'
+      const searchTriggers = [
+        'actualité', 'news', 'breaking', 'dernière minute', 'récent',
+        'résultat', 'score', 'match', 'élection', 'vote', 'gagné', 'perdu',
+        'prix', 'cours', 'taux', 'bourse', 'action', 'bitcoin', 'crypto', 'ethereum',
+        'près de moi', 'proche', 'autour', 'restaurant', 'hôtel', 'magasin', 'où trouver',
+        'météo', 'température', 'pluie', 'soleil', 'vent',
+        'aujourd\'hui', 'maintenant', 'en ce moment', 'actuel', 'en direct',
+        'cherche', 'trouve', 'recherche', 'information sur', 'je veux savoir',
+        'âge de', 'taille de', 'date de naissance', 'biographie',
+        'classement', 'ligue', 'championnat', 'coupe du monde'
       ];
       
-      for (let trigger of searchtriggers) {
-        if (lowerquery.includes(trigger)) return true;
+      for (let trigger of searchTriggers) {
+        if (lowerQuery.includes(trigger)) {
+          console.log(`🔍 Recherche déclenchée par: "${trigger}"`);
+          return true;
+        }
+      }
+      
+      const questionPatterns = [
+        /^(qui|que|quoi|quel|quelle|quels|quelles) (est|sont) (le|la|les) /i,
+        /^(comment|pourquoi|quand|où) /i,
+        /^est-ce que /i
+      ];
+      
+      const words = lowerQuery.split(' ').filter(w => w.length > 0);
+      if (words.length < 6) {
+        for (let pattern of questionPatterns) {
+          if (pattern.test(lowerQuery)) {
+            console.log(`🔍 Recherche pour question courte: "${lowerQuery}"`);
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    }
+
+    function needsChart(query) {
+      if (!query) return false;
+      const lowerQuery = query.toLowerCase();
+      
+      const chartTriggers = [
+        'graphique', 'chart', 'diagramme', 'histogramme',
+        'camembert', 'secteurs', 'barres', 'lignes',
+        'visualisation', 'statistiques', 'stats',
+        'répartition', 'comparaison', 'évolution',
+        'affiche les données', 'montre les chiffres'
+      ];
+      
+      for (let trigger of chartTriggers) {
+        if (lowerQuery.includes(trigger)) return true;
       }
       return false;
     }
 
-    function needschart(query) {
-      if (!query) return false;
-      const lowerquery = query.tolowercase();
-      
-      const charttriggers = [
-        'chart', 'graph', 'pie', 'bar', 'line', 'doughnut',
-        'visualization', 'statistics'
-      ];
-      
-      for (let trigger of charttriggers) {
-        if (lowerquery.includes(trigger)) return true;
-      }
-      return false;
-    }
-
     // ============================================
-    // si graphique demandé
+    // 🎯 SI GRAPHIQUE DEMANDÉ
     // ============================================
-    if (cleanmessage && needschart(cleanmessage)) {
-      console.log('📊 chart request detected');
+    if (cleanMessage && needsChart(cleanMessage)) {
+      console.log('📊 Redirection vers générateur de graphiques');
       
       try {
-        let chartdata = {
+        let chartData = {
           type: 'bar',
-          labels: ['jan', 'feb', 'mar', 'apr', 'may', 'jun'],
-          datasets: [{ label: 'data', data: [65, 59, 80, 81, 56, 75] }],
-          title: "chart"
+          labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'],
+          datasets: [{ label: 'Données', data: [65, 59, 80, 81, 56, 75] }],
+          title: "Graphique"
         };
 
-        const chartresponse = await axios.post(
+        if (cleanMessage.includes('camembert') || cleanMessage.includes('secteurs')) {
+          chartData.type = 'pie';
+          chartData.labels = ['Catégorie A', 'Catégorie B', 'Catégorie C', 'Catégorie D'];
+          chartData.datasets = [{ label: 'Répartition', data: [45, 25, 20, 10] }];
+        } else if (cleanMessage.includes('lignes') || cleanMessage.includes('évolution')) {
+          chartData.type = 'line';
+        } else if (cleanMessage.includes('anneau') || cleanMessage.includes('doughnut')) {
+          chartData.type = 'doughnut';
+        }
+
+        const chartResponse = await axios.post(
           `https://${req.headers.host}/api/chart`,
-          chartdata,
-          { headers: { 'content-type': 'application/json' }, timeout: 10000 }
+          chartData,
+          { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
         );
         
-        if (chartresponse.data?.chart) {
+        if (chartResponse.data?.chart) {
           return res.json({
-            reply: chartresponse.data.chart,
-            suggestions: ["bar chart", "line chart", "pie chart"]
+            reply: chartResponse.data.chart,
+            suggestions: ["Graphique en barres", "Graphique en lignes", "Camembert"]
           });
         }
-      } catch (charterror) {
-        console.error('❌ chart error:', charterror.message);
+      } catch (chartError) {
+        console.error('❌ Erreur graphique:', chartError.message);
       }
     }
 
     // ============================================
-    // si recherche nécessaire
+    // 🎯 SI RECHERCHE NÉCESSAIRE
     // ============================================
-    if (cleanmessage && needswebsearch(cleanmessage)) {
-      console.log('🌐 search request detected');
+    if (cleanMessage && needsWebSearch(cleanMessage)) {
+      console.log('🌐 Redirection vers recherche universelle...');
       
       try {
-        const searchresponse = await axios.post(
-          `https://${req.headers.host}/api/searchunified`,
-          { query: cleanmessage },
-          { headers: { 'content-type': 'application/json' }, timeout: 10000 }
+        const searchResponse = await axios.post(
+          `https://${req.headers.host}/api/searchUnified`,
+          { query: cleanMessage },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
         );
         
-        if (searchresponse.data?.reply) {
+        if (searchResponse.data?.reply) {
           return res.json({
-            reply: searchresponse.data.reply,
-            suggestions: searchresponse.data.suggestions || ["more results", "new search"]
+            reply: searchResponse.data.reply,
+            suggestions: searchResponse.data.suggestions || ["Plus de résultats", "Nouvelle recherche"]
           });
         }
-      } catch (searcherror) {
-        console.error('❌ search error:', searcherror.message);
+      } catch (searchError) {
+        console.error('❌ Erreur recherche:', searchError.message);
       }
     }
 
     // ============================================
-    // construction des messages
+    // 🤖 IA NORMALE
     // ============================================
     
+    // Détection de domaine
+    function detectDomain(text) {
+      const msg = text.toLowerCase();
+      if (msg.match(/code|javascript|python|program|function|bug|api|react|vue|angular|node|html|css/i)) return 'programming';
+      if (msg.match(/proposal|client|price|contract|freelance|invoice|business|startup|company|market/i)) return 'business';
+      if (msg.match(/marketing|seo|ads|social media|growth|brand|content|audience/i)) return 'marketing';
+      if (msg.match(/write|text|email|content|article|blog|grammar|copy|edit|proofread|story/i)) return 'writing';
+      if (msg.match(/focus|time|productivity|organize|task|todo|schedule|calendar|efficiency|workflow/i)) return 'productivity';
+      return 'general';
+    }
+
+    const domain = detectDomain(cleanMessage);
+
+    // Construction des messages
     const messages = [];
 
-    const systemprompt = `you are core ai. respond in ${detectedlang === 'fr' ? 'french' : detectedlang === 'es' ? 'spanish' : detectedlang === 'de' ? 'german' : detectedlang === 'it' ? 'italian' : detectedlang === 'pt' ? 'portuguese' : 'english'}. use html only.`;
-    messages.push({ role: 'system', content: systemprompt });
+    if (system && typeof system === 'string') {
+      messages.push({ 
+        role: 'system', 
+        content: sanitizeMessage(system) + '\n\nREMEMBER: Respond in the user\'s language. Use HTML only.' 
+      });
+    } else {
+      const systemPrompt = `You are CORE AI. Respond in ${detectedLang === 'fr' ? 'French' : 'English'}. Use HTML only.`;
+      messages.push({ role: 'system', content: systemPrompt });
+    }
 
-    if (history && array.isarray(history)) {
-      const lastusermessage = history
+    // Historique (1 message max)
+    if (history && Array.isArray(history)) {
+      const lastUserMessage = history
         .filter(msg => msg && msg.role === 'user' && msg.content)
         .slice(-1);
       
-      lastusermessage.foreach(msg => {
+      lastUserMessage.forEach(msg => {
         messages.push({ 
           role: msg.role, 
-          content: sanitizemessage(msg.content).substring(0, 500)
+          content: sanitizeMessage(msg.content).substring(0, 500)
         });
       });
     }
 
-    if (cleanmessage) messages.push({ role: 'user', content: cleanmessage });
-
-    let reply = null;
-    let apiused = null;
+    messages.push({ role: 'user', content: cleanMessage });
 
     // ============================================
-    // cas 1 : image reçue → toujours gemini
+    // 🚀 SÉLECTION DU MODÈLE (MISTRAL LARGE POUR MODE EXPERT)
     // ============================================
-    if (image && hasgemini) {
-      console.log('📷 image analysis with gemini...');
-      
-      try {
-        const geminipayload = {
-          contents: [{
-            parts: [
-              { text: message || "describe this image in detail" },
-              { inline_data: { mime_type: image.mime || "image/jpeg", data: image.data } }
-            ]
-          }]
-        };
+    
+    let reply;
+    let apiUsed = '';
+    let retryCount = 0;
+    const maxRetries = 2;
 
-        const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generatecontent?key=${process.env.gemini_api_key}`,
-          geminipayload,
-          { timeout: 15000 }
-        );
-
-        reply = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) {
-          apiused = 'gemini vision';
-          reply = `<p>📷 <strong>image analysis:</strong></p><p>${reply}</p>`;
-        }
-      } catch (error) {
-        console.error('❌ gemini vision error:', error.message);
-      }
+    // Définir le modèle à utiliser
+    let selectedModel;
+    let timeoutValue;
+    
+    if (model === 'expert') {
+      // ✅ MODE EXPERT AVEC MISTRAL LARGE (beaucoup plus fiable)
+      selectedModel = 'mistralai/mistral-large'; // Plus fiable que Llama
+      timeoutValue = 20000; // 20 secondes
+      console.log('🧠 Mode Expert activé - Utilisation de Mistral Large');
+    } else {
+      // Mode Rapide - GPT-4o-mini
+      selectedModel = 'openai/gpt-4o-mini';
+      timeoutValue = 10000;
+      console.log('🚀 Mode Rapide activé - Utilisation de GPT-4o-mini');
     }
 
-    // ============================================
-    // cas 2 : fichier reçu → toujours gemini
-    // ============================================
-    if (!reply && file && hasgemini) {
-      console.log('📄 file analysis with gemini...');
-      
+    // Tentative avec le modèle sélectionné
+    while (retryCount <= maxRetries && !reply) {
       try {
-        const geminipayload = {
-          contents: [{
-            parts: [
-              { text: message || "summarize this document" },
-              { inline_data: { mime_type: file.mime || "application/pdf", data: file.data } }
-            ]
-          }]
-        };
-
+        console.log(`📤 Tentative ${retryCount + 1} avec ${selectedModel}...`);
+        
         const response = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generatecontent?key=${process.env.gemini_api_key}`,
-          geminipayload,
-          { timeout: 20000 }
-        );
-
-        reply = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) {
-          apiused = 'gemini document';
-          reply = `<p>📄 <strong>document analysis:</strong></p><p>${reply}</p>`;
-        }
-      } catch (error) {
-        console.error('❌ gemini document error:', error.message);
-      }
-    }
-
-    // ============================================
-    // cas 3 : texte seulement
-    // ============================================
-    if (!reply && cleanmessage) {
-      
-      const messagelength = cleanmessage.length;
-      const isverylong = messagelength > 3000;
-      const needssummarization = cleanmessage.tolowercase().includes('summarize') || 
-                                 cleanmessage.tolowercase().includes('summary') ||
-                                 cleanmessage.tolowercase().includes('résumé');
-
-      // ============================================
-      // décision intelligente (auto/fast combiné)
-      // ============================================
-      const usegeminifortext = deepthink || (isverylong || needssummarization) && hasgemini;
-
-      // 1️⃣ essayer gemini si nécessaire
-      if (usegeminifortext && hasgemini) {
-        try {
-          console.log(`📤 using gemini (${deepthink ? 'deep think' : isverylong ? 'long text' : 'summary'})...`);
-          
-          const geminimessages = messages.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }]
-          }));
-
-          const response = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generatecontent?key=${process.env.gemini_api_key}`,
-            { contents: geminimessages },
-            { timeout: deepthink ? 25000 : 15000 }
-          );
-
-          reply = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (reply) apiused = deepthink ? 'gemini (deep think)' : 'gemini';
-          
-        } catch (error) {
-          console.log('⚠️ gemini failed:', error.message);
-        }
-      }
-
-      // 2️⃣ sinon openrouter (toujours disponible)
-      if (!reply && hasopenrouter) {
-        try {
-          console.log('📤 using openrouter...');
-          
-          const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-              model: 'openai/gpt-4o-mini',
-              messages,
-              temperature: 0.7,
-              max_tokens: deepthink ? 2000 : 1000,
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model: selectedModel,
+            messages,
+            temperature: 0.7,
+            max_tokens: model === 'expert' ? 2000 : 1000,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': `https://${req.headers.host}`,
+              'X-Title': 'CORE AI'
             },
-            {
-              headers: {
-                authorization: `bearer ${process.env.openrouter_api_key}`,
-                'content-type': 'application/json',
-                'http-referer': `https://${req.headers.host}`,
-                'x-title': 'core ai'
-              },
-              timeout: deepthink ? 25000 : 10000
-            }
-          );
-
-          reply = response.data?.choices?.[0]?.message?.content;
-          if (reply) apiused = 'openrouter';
-          
-        } catch (error) {
-          console.log('⚠️ openrouter failed:', error.message);
-        }
-      }
-
-      // 3️⃣ fallback ultime pour deep think
-      if (!reply && deepthink && hasopenrouter) {
-        try {
-          console.log('⚡ deep think fallback to standard...');
-          
-          const fallbackres = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-              model: 'openai/gpt-4o-mini',
-              messages,
-              max_tokens: 1500
-            },
-            {
-              headers: {
-                authorization: `bearer ${process.env.openrouter_api_key}`,
-                'http-referer': `https://${req.headers.host}`,
-                'x-title': 'core ai'
-              },
-              timeout: 10000
-            }
-          );
-          
-          reply = fallbackres.data?.choices?.[0]?.message?.content;
-          if (reply) {
-            apiused = 'gpt-4o-mini (fallback)';
-            reply = `<p><em>⚠️ deep think mode temporarily unavailable. standard response:</em></p>${reply}`;
+            timeout: timeoutValue
           }
-        } catch (ferror) {
-          console.error('❌ fallback failed:', ferror.message);
+        );
+
+        if (response.data?.choices?.[0]?.message?.content) {
+          reply = response.data.choices[0].message.content;
+          apiUsed = model === 'expert' ? 'Mistral Large' : 'GPT-4o-mini';
+        }
+
+      } catch (error) {
+        retryCount++;
+        console.log(`⚠️ Tentative ${retryCount} échouée:`, error.message);
+        
+        if (error.response?.status === 429) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          retryCount--;
+        } else if (retryCount <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
         }
       }
     }
 
+    // ============================================
+    // 🔄 FALLBACK INTELLIGENT
+    // ============================================
+    
+    // Si le modèle principal a échoué et qu'on était en Mode Expert
+    if (!reply && model === 'expert') {
+      console.log('⚠️ Mistral Large indisponible, fallback sur GPT-4o-mini...');
+      try {
+        const fallbackRes = await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model: 'openai/gpt-4o-mini',
+            messages,
+            max_tokens: 1500
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'HTTP-Referer': `https://${req.headers.host}`,
+              'X-Title': 'CORE AI'
+            },
+            timeout: 10000
+          }
+        );
+        reply = fallbackRes.data?.choices?.[0]?.message?.content;
+        if (reply) {
+          apiUsed = 'GPT-4o-mini (Fallback)';
+          // Ajouter un message pour prévenir l'utilisateur
+          reply = `<p><em>⚠️ Le Mode Expert est temporairement saturé. Voici une réponse avec le modèle standard :</em></p>${reply}`;
+        }
+      } catch (fError) {
+        console.error('❌ Fallback échoué:', fError.message);
+      }
+    }
+
+    // Fallback général si tout a échoué
     if (!reply) {
       return res.json({
-        reply: "<p>😅 service temporarily unavailable.</p><p>💡 use charts while waiting!</p>",
-        suggestions: ["📊 pie chart", "📈 bar chart", "📉 line chart"]
+        reply: "<p>⚠️ I'm having trouble connecting right now. Please try again in a moment.</p>",
+        suggestions: ["Try again", "Write a proposal", "Find clients", "Pricing help"]
       });
     }
 
+    // Nettoyage HTML
     if (!reply.includes('<') || !reply.includes('>')) {
       reply = `<p>${reply.replace(/\n/g, '<br>')}</p>`;
     }
 
-    // indicateur discret
-    if (process.env.node_env === 'development') {
-      reply += `<p style="font-size:10px; color:#999; margin-top:10px;">🤖 via ${apiused}</p>`;
-    }
-
-    const suggestions = ["📊 pie chart", "📈 bar chart", "📉 line chart", "📄 proposal"];
+    // Suggestions
+    const suggestions = detectedLang === 'fr'
+      ? ["📊 Camembert", "📈 Barres", "📉 Lignes", "📄 Proposal"]
+      : ["📊 Pie chart", "📈 Bar chart", "📉 Line chart", "📄 Proposal"];
 
     res.json({ reply, suggestions });
 
   } catch (error) {
-    console.error("❌ server error:", error.message);
+    console.error("❌ Server error:", error.message);
     res.json({
-      reply: "<p>⚠️ something went wrong. please try again.</p>",
-      suggestions: ["📊 pie chart", "📈 bar chart", "📉 line chart", "🔄 try again"]
+      reply: "<p>⚠️ Something went wrong. Please try again.</p>",
+      suggestions: ["📊 Camembert", "📈 Barres", "📉 Lignes", "🔄 Réessayer"]
     });
   }
-}; 
+};
