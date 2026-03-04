@@ -1408,79 +1408,6 @@
     }
 
     /* ============================================
-       SÉLECTEUR DE MODÈLE IA (NOUVEAU)
-    ============================================ */
-    .model-selector-wrapper {
-      max-width: 780px;
-      margin: 0 auto;
-      width: 100%;
-      padding: 4px 16px 0;
-      display: flex;
-      justify-content: center;
-    }
-
-    .model-selector {
-      display: flex;
-      background: white;
-      border-radius: 40px;
-      padding: 4px;
-      border: 1px solid var(--border-light);
-      box-shadow: var(--shadow-sm);
-      width: fit-content;
-    }
-
-    body.dark .model-selector {
-      background: var(--bg-dark-secondary);
-      border-color: var(--border-dark);
-    }
-
-    .model-btn {
-      padding: 6px 20px;
-      border-radius: 40px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-      color: var(--text-primary);
-      line-height: 1.5;
-    }
-
-    .model-btn i {
-      font-size: 13px;
-    }
-
-    .model-btn.active {
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      color: white;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-    }
-
-    .model-btn.active i {
-      color: white;
-    }
-
-    .model-btn:not(.active):hover {
-      background: var(--primary-light);
-      color: var(--primary-dark);
-    }
-
-    body.dark .model-btn:not(.active):hover {
-      background: rgba(37, 99, 235, 0.2);
-    }
-
-    @media (max-width: 480px) {
-      .model-btn {
-        padding: 5px 14px;
-        font-size: 12px;
-        gap: 4px;
-      }
-    }
-
-    /* ============================================
        BOUTON SCROLL TO BOTTOM
     ============================================ */
     .scroll-to-bottom-btn {
@@ -2144,18 +2071,6 @@
         </div>
       </div>
 
-      <!-- SÉLECTEUR DE MODÈLE IA (AJOUTÉ ICI) -->
-      <div class="model-selector-wrapper">
-        <div class="model-selector">
-          <div class="model-btn active" onclick="setModel('fast')" id="modelFast">
-            <i class="fas fa-rocket"></i> Mode Rapide
-          </div>
-          <div class="model-btn" onclick="setModel('expert')" id="modelExpert">
-            <i class="fas fa-brain"></i> Mode Expert
-          </div>
-        </div>
-      </div>
-
       <!-- Barre de saisie responsive optimisée -->
       <div class="input-section">
         <div class="input-container">
@@ -2270,50 +2185,6 @@
     const stopButton = document.getElementById('stopButton');
     const voiceStatus = document.getElementById('voiceStatus');
     let finalTranscript = '';
-
-    // ============================================
-    // VARIABLE POUR LE MODÈLE IA (NOUVEAU)
-    // ============================================
-    let currentModel = 'fast'; // 'fast' = GPT-4o-mini, 'expert' = Llama 3.3
-    
-    // Fonction pour changer de modèle
-    function setModel(mode) {
-      currentModel = mode;
-      
-      // Mettre à jour l'interface
-      const fastBtn = document.getElementById('modelFast');
-      const expertBtn = document.getElementById('modelExpert');
-      
-      if (fastBtn && expertBtn) {
-        fastBtn.classList.remove('active');
-        expertBtn.classList.remove('active');
-        
-        if (mode === 'fast') {
-          fastBtn.classList.add('active');
-          showToast('🚀 Mode Rapide activé (GPT-4o-mini)');
-        } else {
-          expertBtn.classList.add('active');
-          showToast('🧠 Mode Expert activé (Llama 3.3)');
-        }
-      }
-      
-      // Sauvegarder la préférence
-      try {
-        localStorage.setItem('preferredModel', mode);
-      } catch (e) {
-        console.log('LocalStorage non disponible');
-      }
-    }
-    
-    // Charger la préférence au démarrage
-    try {
-      const savedModel = localStorage.getItem('preferredModel');
-      if (savedModel) {
-        setModel(savedModel);
-      }
-    } catch (e) {
-      console.log('LocalStorage non disponible');
-    }
 
     // ============================================
     // RECONNAISSANCE VOCALE
@@ -3249,7 +3120,7 @@
     }
 
     // ============================================
-    // ENVOI DE MESSAGE (MODIFIÉ POUR INCLURE currentModel)
+    // ENVOI DE MESSAGE (MODIFIÉ)
     // ============================================
     async function sendMessage() {
       const message = input.value.trim();
@@ -3314,11 +3185,7 @@
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message, 
-            history: messagesForAPI,
-            model: currentModel  // ← AJOUT DU MODÈLE
-          })
+          body: JSON.stringify({ message, history: messagesForAPI })
         });
         
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
