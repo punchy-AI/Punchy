@@ -1,10 +1,10 @@
 {
-  "name": "punchy"
+  "name": "core-ai-tool",
   "version": "1.0.0",
-  "description": "AI-powered assistant with universal search",
-  "main": "index.js",
+  "description": "AI-powered assistant with Vercel functions",
+  "main": "api/chat.js",
   "scripts": {
-    "start": "node api/generate.js",
+    "start": "node api/chat.js",
     "dev": "vercel dev"
   },
   "dependencies": {
