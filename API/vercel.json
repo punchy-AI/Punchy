@@ -1,28 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/chat",
-      "dest": "/api/chat.js"
-    },
-    {
-      "src": "/api/searchUnified",
-      "dest": "/api/searchUnified.js"
-    },
-    {
-      "src": "/api/generate",
-      "dest": "/api/generate.js"
-    },
-    {
-      "src": "/api/translate",
-      "dest": "/api/translate.js"
-    }
-    // ✅ PLUS DE ROUTE /api/chart
+  "rewrites": [
+    { "source": "/api/chat", "destination": "/api/chat.js" },
+    { "source": "/api/generate", "destination": "/api/generate.js" },
+    { "source": "/api/translate", "destination": "/api/translate.js" },
+    { "source": "/api/searchUnified", "destination": "/api/searchUnified.js" }
   ]
 }
